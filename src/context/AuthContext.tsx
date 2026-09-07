@@ -1,7 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { DictionaryWord } from '@/data/arutDictionary';
+import { kvService } from '@/services/kvService';
 
 export type UserRole = 'superadmin' | 'admin' | 'verifier' | 'contributor' | 'supporter';
 
@@ -79,6 +80,9 @@ interface AuthContextType {
   approveWord: (wordId: string, notes?: string) => void;
   rejectWord: (wordId: string, reason?: string) => void;
   requestRevision: (wordId: string, notes?: string) => void;
+  // Cloudflare Bahasa_KV status
+  isKvConnected: boolean | null;
+  refreshKvData: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -204,8 +208,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [contributedWords, setContributedWords] = useState<DictionaryWord[]>([]);
   const [moderatedWords, setModeratedWords] = useState<ModeratedWordEntry[]>(INITIAL_MODERATION_QUEUE);
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [isKvConnected, setIsKvConnected] = useState<boolean | null>(null);
 
-  // Load state from localStorage
+  const refreshKvData = useCallback(async () => {
+    try {
+      const health = await kvService.checkHealth();
+      if (health && health.kvConnected) {
+        setIsKvConnected(true);
+        const [remoteQueue, remoteWords] = await Promise.all([
+          kvService.getModerationQueue(),
+          kvService.getWords(),
+        ]);
+        if (remoteQueue && Array.isArray(remoteQueue) && remoteQueue.length > 0) {
+          setModeratedWords(remoteQueue);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('arut_mod_queue', JSON.stringify(remoteQueue));
+          }
+        }
+        if (remoteWords && Array.isArray(remoteWords) && remoteWords.length > 0) {
+          setContributedWords(remoteWords);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('arut_user_contributions', JSON.stringify(remoteWords));
+          }
+        }
+      } else {
+        setIsKvConnected(false);
+      }
+    } catch {
+      setIsKvConnected(false);
+    }
+  }, []);
+
+  // Load state from localStorage and then attempt KV sync
   useEffect(() => {
     try {
       const savedUser = localStorage.getItem('arut_user');
@@ -254,7 +288,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {
       console.error('Error reading localStorage', e);
     }
-  }, []);
+
+    // Sync with Bahasa_KV if online
+    refreshKvData();
+  }, [refreshKvData]);
 
   // Multi-Role Checkers
   const hasRole = (role: UserRole): boolean => {
@@ -367,6 +404,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('arut_mod_queue', JSON.stringify(updatedQueue));
     }
 
+    // Background sync to Bahasa_KV
+    kvService.submitWord(modEntry).catch(() => {});
+
     if (user) {
       const updatedUser = {
         ...user,
@@ -419,6 +459,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (typeof window !== 'undefined') {
       localStorage.setItem('arut_mod_queue', JSON.stringify(updated));
     }
+
+    // Sync to Bahasa_KV
+    kvService.updateWordStatus(wordId, 'approve', notes, verifierTitle).catch(() => {});
   };
 
   const rejectWord = (wordId: string, reason?: string) => {
@@ -449,6 +492,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (typeof window !== 'undefined') {
       localStorage.setItem('arut_mod_queue', JSON.stringify(updated));
     }
+
+    // Sync to Bahasa_KV
+    kvService.updateWordStatus(wordId, 'reject', reason).catch(() => {});
   };
 
   const requestRevision = (wordId: string, notes?: string) => {
@@ -479,6 +525,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (typeof window !== 'undefined') {
       localStorage.setItem('arut_mod_queue', JSON.stringify(updated));
     }
+
+    // Sync to Bahasa_KV
+    kvService.updateWordStatus(wordId, 'revision', notes).catch(() => {});
   };
 
   // Superadmin Role Assignment
@@ -552,6 +601,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         approveWord,
         rejectWord,
         requestRevision,
+        isKvConnected,
+        refreshKvData,
       }}
     >
       {children}

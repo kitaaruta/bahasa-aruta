@@ -20,7 +20,9 @@ export default function AreaKontributorPage() {
     rejectWord,
     requestRevision,
     allUsers,
-    updateUserRoles
+    updateUserRoles,
+    isKvConnected,
+    refreshKvData
   } = useAuth();
   const { language } = useLanguage();
 
@@ -296,6 +298,46 @@ export default function AreaKontributorPage() {
                   {r.toUpperCase()}
                 </span>
               ))}
+              {isKvConnected === true && (
+                <span
+                  title="Terhubung ke Cloudflare Bahasa_KV (Namespace ID: eddaaf1689e54ba0a11941ca0d5a1191)"
+                  style={{
+                    fontSize: '0.675rem',
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    background: '#ECFDF5',
+                    color: '#047857',
+                    border: '1px solid #6EE7B7',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981', display: 'inline-block' }}></span>
+                  Bahasa_KV AKTIF
+                </span>
+              )}
+              {isKvConnected === false && (
+                <span
+                  title="Berjalan dalam penyimpanan lokal (LocalStorage). Akan otomatis beralih ke Bahasa_KV setelah deploy Cloudflare."
+                  style={{
+                    fontSize: '0.675rem',
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    background: '#FFFBEB',
+                    color: '#B45309',
+                    border: '1px solid #FDE68A',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#F59E0B', display: 'inline-block' }}></span>
+                  MODE LOKAL
+                </span>
+              )}
             </div>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
               📍 {user.origin} • ID: {user.id}
