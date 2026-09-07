@@ -10,6 +10,9 @@ export interface Contributor {
   badges: string[];
   joinedDate: string;
   isAdatElder?: boolean;
+  isVerified?: boolean;
+  verifiedByAdminName?: string;
+  verifiedAt?: string;
 }
 
 export const CONTRIBUTORS_DATA: Contributor[] = [
@@ -24,7 +27,10 @@ export const CONTRIBUTORS_DATA: Contributor[] = [
     wordsVerified: 512,
     badges: ['Penjaga Tutur', 'Verifikator Utama', 'Tetua Adat'],
     joinedDate: 'Januari 2024',
-    isAdatElder: true
+    isAdatElder: true,
+    isVerified: true,
+    verifiedByAdminName: 'Superadmin Master (TEN)',
+    verifiedAt: '10 Januari 2024'
   },
   {
     id: 'c-02',

@@ -177,7 +177,7 @@ export default function HomePage() {
           <Link href="/donasi" className="btn btn-primary">
             {t('home.ctaDonate')}
           </Link>
-          <Link href="/area-kontributor" className="btn btn-outline">
+          <Link href="/portal" className="btn btn-outline">
             {t('home.ctaPropose')}
           </Link>
         </div>

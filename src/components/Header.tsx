@@ -37,19 +37,15 @@ export const Header: React.FC = () => {
     { label: t('nav.dictionary'), href: '/kamus' },
     { label: t('nav.contributors'), href: '/kontributor' },
     { label: t('nav.donate'), href: '/donasi' },
-    { label: '🌿 ' + t('nav.contributorArea'), href: '/area-kontributor' },
-    ...(hasRole('verifier') || hasRole('admin') || hasRole('superadmin')
-      ? [{ label: language === 'en' ? '📜 Verifier Area' : '📜 Area Verifikator', href: '/area-verifikator' }]
-      : []),
-    ...(hasRole('admin') || hasRole('superadmin')
-      ? [{ label: language === 'en' ? '🛡️ Admin Area' : '🛡️ Area Admin', href: '/area-admin' }]
-      : []),
-    ...(hasRole('superadmin')
-      ? [{ label: language === 'en' ? '👑 Superadmin Area' : '👑 Area Superadmin', href: '/area-superadmin' }]
-      : []),
+    { label: '🏛️ ' + t('nav.portal'), href: '/portal' },
   ];
 
   const closeMenu = () => setMobileMenuOpen(false);
+
+  // Return null on /portal or /dashboard to provide full-viewport enterprise layout
+  if (pathname && (pathname.startsWith('/portal') || pathname.startsWith('/dashboard'))) {
+    return null;
+  }
 
   return (
     <header className="header-wrapper">
@@ -210,7 +206,28 @@ export const Header: React.FC = () => {
                   {/* Dropdown Navigation Actions */}
                   <div style={{ padding: '6px' }}>
                     <Link
-                      href="/akun"
+                      href="/portal"
+                      onClick={() => setProfileMenuOpen(false)}
+                      className="dropdown-item-link"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '10px 12px',
+                        borderRadius: 'var(--radius-sm)',
+                        fontSize: '0.85rem',
+                        fontWeight: 700,
+                        color: 'var(--text-primary)',
+                        textDecoration: 'none',
+                        transition: 'background 0.15s'
+                      }}
+                    >
+                      <span>🏛️</span>
+                      <span>{language === 'en' ? 'Portal Console' : 'Konsol Portal'}</span>
+                    </Link>
+
+                    <Link
+                      href="/portal?area=akun"
                       onClick={() => setProfileMenuOpen(false)}
                       className="dropdown-item-link"
                       style={{
@@ -226,12 +243,12 @@ export const Header: React.FC = () => {
                         transition: 'background 0.15s'
                       }}
                     >
-                      <span>👤</span>
-                      <span>{language === 'en' ? 'My Account' : 'My Akun'}</span>
+                      <span>⚙️</span>
+                      <span>{language === 'en' ? 'Manage My Account' : 'Kelola My Akun (Portal)'}</span>
                     </Link>
 
                     <Link
-                      href="/area-kontributor"
+                      href="/profil"
                       onClick={() => setProfileMenuOpen(false)}
                       className="dropdown-item-link"
                       style={{
@@ -243,6 +260,33 @@ export const Header: React.FC = () => {
                         fontSize: '0.85rem',
                         fontWeight: 600,
                         color: 'var(--text-primary)',
+                        textDecoration: 'none',
+                        transition: 'background 0.15s'
+                      }}
+                    >
+                      <span>🌐</span>
+                      <span>{language === 'en' ? 'My Public Profile' : 'Profil Publik Saya'}</span>
+                    </Link>
+
+                    <div style={{ height: '1px', background: 'var(--border-color)', margin: '4px 6px' }} />
+
+                    <div style={{ padding: '4px 12px', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      {language === 'en' ? 'Workspaces' : 'Portal Kerja'}
+                    </div>
+
+                    <Link
+                      href="/portal?area=kontributor"
+                      onClick={() => setProfileMenuOpen(false)}
+                      className="dropdown-item-link"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '8px 12px',
+                        borderRadius: 'var(--radius-sm)',
+                        fontSize: '0.825rem',
+                        fontWeight: 600,
+                        color: '#059669',
                         textDecoration: 'none',
                         transition: 'background 0.15s'
                       }}
@@ -253,16 +297,16 @@ export const Header: React.FC = () => {
 
                     {(hasRole('verifier') || hasRole('admin') || hasRole('superadmin')) && (
                       <Link
-                        href="/area-verifikator"
+                        href="/portal?area=verifikator"
                         onClick={() => setProfileMenuOpen(false)}
                         className="dropdown-item-link"
                         style={{
                           display: 'flex',
                           alignItems: 'center',
                           gap: '10px',
-                          padding: '10px 12px',
+                          padding: '8px 12px',
                           borderRadius: 'var(--radius-sm)',
-                          fontSize: '0.85rem',
+                          fontSize: '0.825rem',
                           fontWeight: 600,
                           color: '#6D28D9',
                           textDecoration: 'none',
@@ -276,16 +320,16 @@ export const Header: React.FC = () => {
 
                     {(hasRole('admin') || hasRole('superadmin')) && (
                       <Link
-                        href="/area-admin"
+                        href="/portal?area=admin"
                         onClick={() => setProfileMenuOpen(false)}
                         className="dropdown-item-link"
                         style={{
                           display: 'flex',
                           alignItems: 'center',
                           gap: '10px',
-                          padding: '10px 12px',
+                          padding: '8px 12px',
                           borderRadius: 'var(--radius-sm)',
-                          fontSize: '0.85rem',
+                          fontSize: '0.825rem',
                           fontWeight: 600,
                           color: '#0F766E',
                           textDecoration: 'none',
@@ -299,16 +343,16 @@ export const Header: React.FC = () => {
 
                     {hasRole('superadmin') && (
                       <Link
-                        href="/area-superadmin"
+                        href="/portal?area=superadmin"
                         onClick={() => setProfileMenuOpen(false)}
                         className="dropdown-item-link"
                         style={{
                           display: 'flex',
                           alignItems: 'center',
                           gap: '10px',
-                          padding: '10px 12px',
+                          padding: '8px 12px',
                           borderRadius: 'var(--radius-sm)',
-                          fontSize: '0.85rem',
+                          fontSize: '0.825rem',
                           fontWeight: 600,
                           color: '#B45309',
                           textDecoration: 'none',
@@ -390,13 +434,22 @@ export const Header: React.FC = () => {
           {isLoggedIn ? (
             <div style={{ marginTop: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '8px' }}>
               <Link
-                href="/akun"
+                href="/portal?area=akun"
                 onClick={closeMenu}
                 className="nav-link"
                 style={{ padding: '10px 14px', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}
               >
-                <span>👤</span>
-                <span>{language === 'en' ? 'My Account' : 'My Akun'}</span>
+                <span>⚙️</span>
+                <span>{language === 'en' ? 'Manage My Account' : 'Kelola My Akun (Portal)'}</span>
+              </Link>
+              <Link
+                href="/profil"
+                onClick={closeMenu}
+                className="nav-link"
+                style={{ padding: '10px 14px', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                <span>🌐</span>
+                <span>{language === 'en' ? 'My Public Profile' : 'Profil Publik Saya'}</span>
               </Link>
               <button
                 type="button"

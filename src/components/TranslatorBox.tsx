@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { translateText, DictionaryWord, COMMON_PHRASES, LangCode } from '@/data/arutDictionary';
 import { useLanguage } from '@/context/LanguageContext';
+import { useAuth } from '@/context/AuthContext';
 
 interface TranslatorBoxProps {
   initialText?: string;
@@ -14,6 +15,7 @@ export const TranslatorBox: React.FC<TranslatorBoxProps> = ({
   showPhrases = true
 }) => {
   const { t, language } = useLanguage();
+  const { allDictionaryWords } = useAuth();
   const [fromLang, setFromLang] = useState<LangCode>('id');
   const [toLang, setToLang] = useState<LangCode>('arut');
   const [inputText, setInputText] = useState(initialText);
@@ -40,11 +42,16 @@ export const TranslatorBox: React.FC<TranslatorBoxProps> = ({
       return;
     }
 
-    const { translatedText, matchedWords: matched, notes: nts } = translateText(inputText, fromLang, toLang);
+    const { translatedText, matchedWords: matched, notes: nts } = translateText(
+      inputText,
+      fromLang,
+      toLang,
+      allDictionaryWords
+    );
     setResultText(translatedText);
     setMatchedWords(matched);
     setNotes(nts);
-  }, [inputText, fromLang, toLang]);
+  }, [inputText, fromLang, toLang, allDictionaryWords]);
 
   const handleSwap = () => {
     const prevFrom = fromLang;

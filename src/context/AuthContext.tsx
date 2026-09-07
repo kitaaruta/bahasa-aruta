@@ -1,7 +1,7 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { DictionaryWord } from '@/data/arutDictionary';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { DictionaryWord, ARUT_DICTIONARY } from '@/data/arutDictionary';
 import { kvService } from '@/services/kvService';
 
 export type UserRole = 'superadmin' | 'admin' | 'verifier' | 'contributor' | 'supporter';
@@ -9,6 +9,8 @@ export type UserRole = 'superadmin' | 'admin' | 'verifier' | 'contributor' | 'su
 export interface ContributorUser {
   id: string;
   name: string;
+  honorificTitle?: string;
+  villageId?: string;
   email: string;
   roles: UserRole[]; // One account can have multiple roles
   primaryRole: UserRole;
@@ -18,6 +20,10 @@ export interface ContributorUser {
   badge: string;
   wordsSubmittedCount: number;
   wordsVerifiedCount: number;
+  isVerified?: boolean;
+  verifiedByAdminName?: string;
+  verifiedAt?: string;
+  verifiedByRole?: UserRole;
 }
 
 export const getHighestRole = (roles: UserRole[] = []): UserRole => {
@@ -25,6 +31,62 @@ export const getHighestRole = (roles: UserRole[] = []): UserRole => {
   if (roles.includes('admin')) return 'admin';
   if (roles.includes('verifier')) return 'verifier';
   return 'contributor';
+};
+
+export const getRoleLevel = (role: UserRole): number => {
+  switch (role) {
+    case 'superadmin':
+      return 4;
+    case 'admin':
+      return 3;
+    case 'verifier':
+      return 2;
+    case 'contributor':
+      return 1;
+    case 'supporter':
+    default:
+      return 0;
+  }
+};
+
+export const getUserHighestRoleLevel = (roles: UserRole[] = []): number => {
+  if (!roles || roles.length === 0) return 1;
+  return Math.max(...roles.map(getRoleLevel));
+};
+
+/**
+ * Business Rule:
+ * 1. Admin can verify accounts with roles strictly below admin (verifier, contributor, supporter).
+ * 2. Role admin can ONLY be verified by Superadmin.
+ * 3. Superadmin cannot be verified by other users.
+ */
+export const canVerifyTargetUser = (
+  actorRoles: UserRole[] = [],
+  targetRoles: UserRole[] = []
+): { canVerify: boolean; reason?: string } => {
+  const isSuperadmin = actorRoles.includes('superadmin');
+  const isAdmin = actorRoles.includes('admin');
+
+  if (!isSuperadmin && !isAdmin) {
+    return { canVerify: false, reason: 'Hanya Admin atau Superadmin yang memiliki hak verifikasi akun.' };
+  }
+
+  const targetHasSuperadmin = targetRoles.includes('superadmin');
+  const targetHasAdmin = targetRoles.includes('admin');
+
+  if (targetHasSuperadmin) {
+    return { canVerify: false, reason: 'Akun Superadmin adalah pengelola sistem tertinggi dan tidak dapat diverifikasi pihak lain.' };
+  }
+
+  if (targetHasAdmin) {
+    if (isSuperadmin) {
+      return { canVerify: true };
+    }
+    return { canVerify: false, reason: 'Akun dengan role Admin hanya bisa diverifikasi oleh Superadmin.' };
+  }
+
+  // Target role is below admin (verifier, contributor, etc.) -> both admin and superadmin can verify
+  return { canVerify: true };
 };
 
 export const getRoleBorderColor = (role: UserRole): string => {
@@ -47,13 +109,130 @@ export interface ModeratedWordEntry extends DictionaryWord {
   status: 'approved' | 'pending' | 'rejected' | 'revision';
   submittedAt: string;
   adminNotes?: string;
+  verificationNote?: string;
   verifiedAt?: string;
   verifiedByName?: string;
+  verifiedByVerifierName?: string;
 }
 
-interface RegisterData {
+export interface RegionVillage {
+  id: string;
+  name: string;
+  subdistrict: string;
+  regency: string;
+  description: string;
+  isIndigenousArut: boolean;
+  status: 'active' | 'archived';
+  createdAt: string;
+}
+
+export const INITIAL_REGIONS: RegionVillage[] = [
+  {
+    id: 'reg-01',
+    name: 'Kelurahan Pangkut',
+    subdistrict: 'Kecamatan Arut Utara',
+    regency: 'Kabupaten Kotawaringin Barat',
+    description: 'Pusat pemerintahan kecamatan dan kedamangan adat Dayak Arut.',
+    isIndigenousArut: true,
+    status: 'active',
+    createdAt: '2026-01-01'
+  },
+  {
+    id: 'reg-02',
+    name: 'Desa Sambi',
+    subdistrict: 'Kecamatan Arut Utara',
+    regency: 'Kabupaten Kotawaringin Barat',
+    description: 'Wilayah penutur hulu Sungai Arut dengan leksikon tradisional yang kaya.',
+    isIndigenousArut: true,
+    status: 'active',
+    createdAt: '2026-01-01'
+  },
+  {
+    id: 'reg-03',
+    name: 'Desa Gandis',
+    subdistrict: 'Kecamatan Arut Utara',
+    regency: 'Kabupaten Kotawaringin Barat',
+    description: 'Komunitas adat Arut hilir dengan kekhasan tutur dialek sungai.',
+    isIndigenousArut: true,
+    status: 'active',
+    createdAt: '2026-01-01'
+  },
+  {
+    id: 'reg-04',
+    name: 'Desa Kerabu',
+    subdistrict: 'Kecamatan Arut Utara',
+    regency: 'Kabupaten Kotawaringin Barat',
+    description: 'Komunitas adat Dayak Arut dengan tradisi lisan rimba dan perladangan.',
+    isIndigenousArut: true,
+    status: 'active',
+    createdAt: '2026-01-01'
+  },
+  {
+    id: 'reg-05',
+    name: 'Desa Pandau',
+    subdistrict: 'Kecamatan Arut Utara',
+    regency: 'Kabupaten Kotawaringin Barat',
+    description: 'Wilayah bantaran sungai dengan kearifan navigasi riam dan perahu.',
+    isIndigenousArut: true,
+    status: 'active',
+    createdAt: '2026-01-01'
+  },
+  {
+    id: 'reg-06',
+    name: 'Desa Penyombaan',
+    subdistrict: 'Kecamatan Arut Utara',
+    regency: 'Kabupaten Kotawaringin Barat',
+    description: 'Wilayah adat dengan istilah flora hutan ulin dan ritual adat.',
+    isIndigenousArut: true,
+    status: 'active',
+    createdAt: '2026-01-01'
+  },
+  {
+    id: 'reg-07',
+    name: 'Desa Riam',
+    subdistrict: 'Kecamatan Arut Utara',
+    regency: 'Kabupaten Kotawaringin Barat',
+    description: 'Kawasan riam air deras dengan kosakata geografi sungai yang spesifik.',
+    isIndigenousArut: true,
+    status: 'active',
+    createdAt: '2026-01-01'
+  },
+  {
+    id: 'reg-08',
+    name: 'Desa Sukarami',
+    subdistrict: 'Kecamatan Arut Utara',
+    regency: 'Kabupaten Kotawaringin Barat',
+    description: 'Komunitas penutur aktif dan gerakan generasi muda pelestari bahasa.',
+    isIndigenousArut: true,
+    status: 'active',
+    createdAt: '2026-01-01'
+  },
+  {
+    id: 'reg-09',
+    name: 'Pangkalan Bun',
+    subdistrict: 'Kecamatan Arut Selatan',
+    regency: 'Kabupaten Kotawaringin Barat',
+    description: 'Ibukota kabupaten, pusat arsip sejarah, dan simpul riset kebudayaan.',
+    isIndigenousArut: false,
+    status: 'active',
+    createdAt: '2026-01-01'
+  },
+  {
+    id: 'reg-10',
+    name: 'Luar Daerah / Diaspora / Umum',
+    subdistrict: 'Nasional / Internasional',
+    regency: 'Lintas Wilayah',
+    description: 'Masyarakat umum, perantau, peneliti, akademisi, dan pemerhati bahasa Dayak.',
+    isIndigenousArut: false,
+    status: 'active',
+    createdAt: '2026-01-01'
+  }
+];
+
+export interface RegisterData {
   name: string;
   email: string;
+  password?: string;
   origin: string;
   role: string;
   motivation: string;
@@ -69,17 +248,29 @@ interface AuthContextType {
   register: (data: RegisterData) => boolean;
   logout: () => void;
   contributedWords: DictionaryWord[];
+  allDictionaryWords: DictionaryWord[];
   addWord: (newWord: Omit<DictionaryWord, 'id'>) => void;
+  resubmitWord: (wordId: string, updatedData: Partial<DictionaryWord>) => void;
+  bulkAddWords: (words: Array<Omit<DictionaryWord, 'id'>>) => number;
   favorites: string[];
   toggleFavorite: (wordId: string) => void;
   isFavorite: (wordId: string) => boolean;
   // Superadmin & Admin functionalities
   allUsers: ContributorUser[];
   updateUserRoles: (userId: string, newRoles: UserRole[]) => void;
+  verifyUserAccount: (targetUserId: string, verifierUser?: ContributorUser | null) => { success: boolean; message: string };
+  unverifyUserAccount: (targetUserId: string, actorUser?: ContributorUser | null) => { success: boolean; message: string };
   moderatedWords: ModeratedWordEntry[];
   approveWord: (wordId: string, notes?: string) => void;
   rejectWord: (wordId: string, reason?: string) => void;
   requestRevision: (wordId: string, notes?: string) => void;
+  // Kelola Desa / Wilayah
+  regions: RegionVillage[];
+  addRegion: (data: Omit<RegionVillage, 'id' | 'createdAt'>) => void;
+  updateRegion: (id: string, data: Partial<RegionVillage>) => void;
+  deleteRegion: (id: string) => void;
+  // Pengelolaan Profil Pengguna
+  updateUserProfile: (data: Partial<ContributorUser>) => void;
   // Cloudflare Bahasa_KV status
   isKvConnected: boolean | null;
   refreshKvData: () => Promise<void>;
@@ -100,6 +291,10 @@ const INITIAL_DEMO_USERS: Record<string, ContributorUser> = {
     badge: 'Superadmin Master',
     wordsSubmittedCount: 520,
     wordsVerifiedCount: 780,
+    isVerified: true,
+    verifiedByAdminName: 'Sistem Pusat Aruta (Root Founder)',
+    verifiedAt: '1 Januari 2026',
+    verifiedByRole: 'superadmin'
   },
   admin: {
     id: 'usr-admin',
@@ -113,6 +308,10 @@ const INITIAL_DEMO_USERS: Record<string, ContributorUser> = {
     badge: 'Admin Platform',
     wordsSubmittedCount: 160,
     wordsVerifiedCount: 310,
+    isVerified: true,
+    verifiedByAdminName: 'Superadmin Master (TEN)',
+    verifiedAt: '5 Januari 2026',
+    verifiedByRole: 'superadmin'
   },
   elder: {
     id: 'usr-elder',
@@ -126,6 +325,10 @@ const INITIAL_DEMO_USERS: Record<string, ContributorUser> = {
     badge: 'Tetua Adat / Verifikator',
     wordsSubmittedCount: 340,
     wordsVerifiedCount: 512,
+    isVerified: true,
+    verifiedByAdminName: 'Admin Operasional (Basa Arut)',
+    verifiedAt: '10 Januari 2026',
+    verifiedByRole: 'admin'
   },
   volunteer: {
     id: 'usr-volunteer',
@@ -139,6 +342,7 @@ const INITIAL_DEMO_USERS: Record<string, ContributorUser> = {
     badge: 'Relawan Pemuda',
     wordsSubmittedCount: 98,
     wordsVerifiedCount: 45,
+    isVerified: false
   }
 };
 
@@ -208,6 +412,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [contributedWords, setContributedWords] = useState<DictionaryWord[]>([]);
   const [moderatedWords, setModeratedWords] = useState<ModeratedWordEntry[]>(INITIAL_MODERATION_QUEUE);
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [regions, setRegions] = useState<RegionVillage[]>(INITIAL_REGIONS);
   const [isKvConnected, setIsKvConnected] = useState<boolean | null>(null);
 
   const refreshKvData = useCallback(async () => {
@@ -284,6 +489,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const savedFavs = localStorage.getItem('arut_favorites');
       if (savedFavs) {
         setFavorites(JSON.parse(savedFavs));
+      }
+
+      const savedRegions = localStorage.getItem('arut_regions');
+      if (savedRegions) {
+        try {
+          setRegions(JSON.parse(savedRegions));
+        } catch (e) {
+          console.error('Error parsing arut_regions', e);
+        }
       }
     } catch (e) {
       console.error('Error reading localStorage', e);
@@ -419,31 +633,123 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Admin & Superadmin moderation actions
+  const resubmitWord = (wordId: string, updatedData: Partial<DictionaryWord>) => {
+    const updatedContribs = contributedWords.map(cw => {
+      if (cw.id === wordId) {
+        return {
+          ...cw,
+          ...updatedData,
+          verifiedBy: 'Menunggu Peninjauan Ulang Verifikator',
+          dateAdded: 'Diperbaiki baru saja'
+        };
+      }
+      return cw;
+    });
+    setContributedWords(updatedContribs);
+
+    const updatedQueue = moderatedWords.map(mw => {
+      if (mw.id === wordId) {
+        return {
+          ...mw,
+          ...updatedData,
+          status: 'pending' as const,
+          submittedAt: 'Diperbaiki baru saja',
+          verifiedBy: 'Menunggu Peninjauan Ulang Verifikator',
+          adminNotes: undefined
+        };
+      }
+      return mw;
+    });
+    setModeratedWords(updatedQueue);
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('arut_user_contributions', JSON.stringify(updatedContribs));
+      localStorage.setItem('arut_mod_queue', JSON.stringify(updatedQueue));
+    }
+  };
+
+  const bulkAddWords = (words: Array<Omit<DictionaryWord, 'id'>>): number => {
+    if (!words || words.length === 0) return 0;
+    const now = Date.now();
+    const newItems: DictionaryWord[] = words.map((w, idx) => ({
+      ...w,
+      id: `cw-${now}-${idx}`,
+      verifiedBy: 'Menunggu Moderasi Tim Adat',
+      dateAdded: 'Impor Massal'
+    }));
+
+    const newModEntries: ModeratedWordEntry[] = newItems.map(item => ({
+      ...item,
+      submitterName: user?.name || 'Kontributor',
+      submitterRole: user?.badge || 'Kontributor',
+      status: 'pending' as const,
+      submittedAt: 'Impor Massal'
+    }));
+
+    const updatedContribs = [...newItems, ...contributedWords];
+    const updatedQueue = [...newModEntries, ...moderatedWords];
+
+    setContributedWords(updatedContribs);
+    setModeratedWords(updatedQueue);
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('arut_user_contributions', JSON.stringify(updatedContribs));
+      localStorage.setItem('arut_mod_queue', JSON.stringify(updatedQueue));
+    }
+
+    if (user) {
+      const updatedUser = {
+        ...user,
+        wordsSubmittedCount: user.wordsSubmittedCount + words.length
+      };
+      setUser(updatedUser);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('arut_user', JSON.stringify(updatedUser));
+      }
+    }
+
+    return words.length;
+  };
+
+  // Admin & Superadmin moderation actions with full verifier provenance recording
   const approveWord = (wordId: string, notes?: string) => {
-    const verifierTitle = user?.name ? `✓ Disetujui oleh ${user.name}` : '✓ Disetujui Tim Adat & Admin';
+    const verifierName = user?.name || 'Damang Adat Arut Utara';
+    const verifierRole = user?.badge || (user?.roles.includes('verifier') ? 'Tetua Adat / Verifikator' : 'Admin Platform');
+    const verifiedTime = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) + ', ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
+    const verifierTitle = `✓ Disetujui oleh ${verifierName} (${verifierRole})`;
+    const finalNotes = notes || 'Lolos verifikasi kesahihan dialek & tutur asli Dayak Arut.';
+
     const updated = moderatedWords.map(w => {
       if (w.id === wordId) {
         return {
           ...w,
           status: 'approved' as const,
           verifiedBy: verifierTitle,
-          verifiedByName: user?.name || 'Admin Basa Arut',
-          verifiedAt: 'Hari ini, ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-          adminNotes: notes || w.adminNotes || 'Lolos verifikasi kesahihan dialek Arut.'
+          verifiedByName: verifierName,
+          verifierRole: verifierRole,
+          verifiedAt: verifiedTime,
+          adminNotes: finalNotes
         };
       }
       return w;
     });
     setModeratedWords(updated);
 
-    // Sync in contributedWords if present
-    setContributedWords(prev => prev.map(cw => {
+    // Sync in contributedWords
+    const updatedContribs = contributedWords.map(cw => {
       if (cw.id === wordId || (cw.wordArut === moderatedWords.find(m => m.id === wordId)?.wordArut)) {
-        return { ...cw, verifiedBy: verifierTitle };
+        return {
+          ...cw,
+          verifiedBy: verifierTitle,
+          verifiedByName: verifierName,
+          verifierRole: verifierRole,
+          verifiedAt: verifiedTime,
+          adminNotes: finalNotes
+        };
       }
       return cw;
-    }));
+    });
+    setContributedWords(updatedContribs);
 
     if (user) {
       const updatedUser = {
@@ -458,77 +764,137 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (typeof window !== 'undefined') {
       localStorage.setItem('arut_mod_queue', JSON.stringify(updated));
+      localStorage.setItem('arut_user_contributions', JSON.stringify(updatedContribs));
     }
 
     // Sync to Bahasa_KV
-    kvService.updateWordStatus(wordId, 'approve', notes, verifierTitle).catch(() => {});
+    kvService.updateWordStatus(wordId, 'approve', finalNotes, verifierTitle).catch(() => {});
   };
 
   const rejectWord = (wordId: string, reason?: string) => {
+    const verifierName = user?.name || 'Damang Adat Arut Utara';
+    const verifierRole = user?.badge || (user?.roles.includes('verifier') ? 'Tetua Adat / Verifikator' : 'Admin Platform');
+    const verifiedTime = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) + ', ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
     const verifierTitle = `✕ Ditolak (${reason || 'Tidak Sesuai Tutur Asli'})`;
+    const finalReason = reason || 'Kosakata belum memenuhi kaidah dialek Arut.';
+
     const updated = moderatedWords.map(w => {
       if (w.id === wordId) {
         return {
           ...w,
           status: 'rejected' as const,
           verifiedBy: verifierTitle,
-          verifiedByName: user?.name || 'Admin Basa Arut',
-          verifiedAt: 'Hari ini, ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-          adminNotes: reason || 'Kosa kata belum memenuhi kaidah dialek Arut.'
+          verifiedByName: verifierName,
+          verifierRole: verifierRole,
+          verifiedAt: verifiedTime,
+          adminNotes: finalReason
         };
       }
       return w;
     });
     setModeratedWords(updated);
 
-    // Sync in contributedWords if present
-    setContributedWords(prev => prev.map(cw => {
+    // Sync in contributedWords
+    const updatedContribs = contributedWords.map(cw => {
       if (cw.id === wordId || (cw.wordArut === moderatedWords.find(m => m.id === wordId)?.wordArut)) {
-        return { ...cw, verifiedBy: verifierTitle };
+        return {
+          ...cw,
+          verifiedBy: verifierTitle,
+          verifiedByName: verifierName,
+          verifierRole: verifierRole,
+          verifiedAt: verifiedTime,
+          adminNotes: finalReason
+        };
       }
       return cw;
-    }));
+    });
+    setContributedWords(updatedContribs);
 
     if (typeof window !== 'undefined') {
       localStorage.setItem('arut_mod_queue', JSON.stringify(updated));
+      localStorage.setItem('arut_user_contributions', JSON.stringify(updatedContribs));
     }
 
     // Sync to Bahasa_KV
-    kvService.updateWordStatus(wordId, 'reject', reason).catch(() => {});
+    kvService.updateWordStatus(wordId, 'reject', finalReason).catch(() => {});
   };
 
   const requestRevision = (wordId: string, notes?: string) => {
-    const verifierTitle = `✏️ Perlu Revisi (${notes || 'Lengkapi Contoh Kalimat'})`;
+    const verifierName = user?.name || 'Damang Adat Arut Utara';
+    const verifierRole = user?.badge || (user?.roles.includes('verifier') ? 'Tetua Adat / Verifikator' : 'Admin Platform');
+    const verifiedTime = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) + ', ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
+    const finalNotes = notes || 'Mohon sertakan fonetik atau contoh kalimat yang lazim digunakan penutur asli.';
+    const verifierTitle = `✏️ Perlu Revisi (${finalNotes})`;
+
     const updated = moderatedWords.map(w => {
       if (w.id === wordId) {
         return {
           ...w,
           status: 'revision' as const,
           verifiedBy: verifierTitle,
-          verifiedByName: user?.name || 'Admin Basa Arut',
-          verifiedAt: 'Hari ini',
-          adminNotes: notes || 'Mohon sertakan fonetik atau contoh kalimat yang lazim digunakan penutur asli.'
+          verifiedByName: verifierName,
+          verifierRole: verifierRole,
+          verifiedAt: verifiedTime,
+          adminNotes: finalNotes
         };
       }
       return w;
     });
     setModeratedWords(updated);
 
-    // Sync in contributedWords if present
-    setContributedWords(prev => prev.map(cw => {
+    // Sync in contributedWords
+    const updatedContribs = contributedWords.map(cw => {
       if (cw.id === wordId || (cw.wordArut === moderatedWords.find(m => m.id === wordId)?.wordArut)) {
-        return { ...cw, verifiedBy: verifierTitle };
+        return {
+          ...cw,
+          verifiedBy: verifierTitle,
+          verifiedByName: verifierName,
+          verifierRole: verifierRole,
+          verifiedAt: verifiedTime,
+          adminNotes: finalNotes
+        };
       }
       return cw;
-    }));
+    });
+    setContributedWords(updatedContribs);
 
     if (typeof window !== 'undefined') {
       localStorage.setItem('arut_mod_queue', JSON.stringify(updated));
+      localStorage.setItem('arut_user_contributions', JSON.stringify(updatedContribs));
     }
 
     // Sync to Bahasa_KV
-    kvService.updateWordStatus(wordId, 'revision', notes).catch(() => {});
+    kvService.updateWordStatus(wordId, 'revision', finalNotes).catch(() => {});
   };
+
+  // Combined master dictionary of baseline + all verified community words
+  const allDictionaryWords = useMemo(() => {
+    const combined: DictionaryWord[] = [...ARUT_DICTIONARY];
+
+    // Merge approved words from moderation queue
+    moderatedWords.filter(m => m.status === 'approved').forEach(mw => {
+      const idx = combined.findIndex(w => w.id === mw.id || w.wordArut.toLowerCase() === mw.wordArut.toLowerCase());
+      if (idx >= 0) {
+        combined[idx] = { ...combined[idx], ...mw };
+      } else {
+        combined.unshift(mw);
+      }
+    });
+
+    // Merge approved words from contributedWords
+    contributedWords.forEach(cw => {
+      if (cw.verifiedBy && (cw.verifiedBy.includes('Disetujui') || cw.verifiedBy.includes('✓'))) {
+        const idx = combined.findIndex(w => w.id === cw.id || w.wordArut.toLowerCase() === cw.wordArut.toLowerCase());
+        if (idx >= 0) {
+          combined[idx] = { ...combined[idx], ...cw };
+        } else {
+          combined.unshift(cw);
+        }
+      }
+    });
+
+    return combined;
+  }, [moderatedWords, contributedWords]);
 
   // Superadmin Role Assignment
   const updateUserRoles = (userId: string, newRoles: UserRole[]) => {
@@ -579,6 +945,161 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const isFavorite = (wordId: string) => favorites.includes(wordId);
 
+  // Kelola Desa / Domisili / Wilayah Tutur
+  const addRegion = (data: Omit<RegionVillage, 'id' | 'createdAt'>) => {
+    const newReg: RegionVillage = {
+      ...data,
+      id: `reg-${Date.now()}`,
+      createdAt: new Date().toISOString().split('T')[0]
+    };
+    const updated = [newReg, ...regions];
+    setRegions(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('arut_regions', JSON.stringify(updated));
+    }
+  };
+
+  const updateRegion = (id: string, data: Partial<RegionVillage>) => {
+    const updated = regions.map(r => r.id === id ? { ...r, ...data } : r);
+    setRegions(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('arut_regions', JSON.stringify(updated));
+    }
+  };
+
+  const deleteRegion = (id: string) => {
+    const updated = regions.filter(r => r.id !== id);
+    setRegions(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('arut_regions', JSON.stringify(updated));
+    }
+  };
+
+  const updateUserProfile = (data: Partial<ContributorUser>) => {
+    if (!user) return;
+    const updatedUser: ContributorUser = { ...user, ...data };
+    setUser(updatedUser);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('arut_user', JSON.stringify(updatedUser));
+    }
+
+    setAllUsers(prev => {
+      const next = prev.map(u => u.id === user.id ? { ...u, ...data } : u);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('arut_all_users', JSON.stringify(next));
+      }
+      return next;
+    });
+  };
+
+  // Verifikasi Akun Berjenjang
+  // Aturan: Admin memverifikasi role di bawahnya (verifier, contributor). Role admin hanya bisa diverifikasi oleh superadmin.
+  const verifyUserAccount = (targetUserId: string, verifierUser?: ContributorUser | null) => {
+    const actor = verifierUser || user;
+    if (!actor) {
+      return { success: false, message: 'Harap masuk ke akun admin/superadmin terlebih dahulu.' };
+    }
+
+    const targetUser = allUsers.find(u => u.id === targetUserId);
+    if (!targetUser) {
+      return { success: false, message: 'Akun target tidak ditemukan.' };
+    }
+
+    const check = canVerifyTargetUser(actor.roles, targetUser.roles);
+    if (!check.canVerify) {
+      return { success: false, message: check.reason || 'Anda tidak memiliki hak untuk memverifikasi akun ini.' };
+    }
+
+    const nowFormatted = new Date().toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+
+    const updated = allUsers.map(u => {
+      if (u.id === targetUserId) {
+        return {
+          ...u,
+          isVerified: true,
+          verifiedByAdminName: actor.name,
+          verifiedAt: nowFormatted,
+          verifiedByRole: getHighestRole(actor.roles)
+        };
+      }
+      return u;
+    });
+
+    setAllUsers(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('arut_all_users', JSON.stringify(updated));
+    }
+
+    if (user && user.id === targetUserId) {
+      const updatedSelf = updated.find(u => u.id === targetUserId);
+      if (updatedSelf) {
+        setUser(updatedSelf);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('arut_user', JSON.stringify(updatedSelf));
+        }
+      }
+    }
+
+    return {
+      success: true,
+      message: `✓ Akun "${targetUser.name}" berhasil diverifikasi oleh ${actor.name}!`
+    };
+  };
+
+  const unverifyUserAccount = (targetUserId: string, actorUser?: ContributorUser | null) => {
+    const actor = actorUser || user;
+    if (!actor) {
+      return { success: false, message: 'Harap masuk ke akun admin/superadmin terlebih dahulu.' };
+    }
+
+    const targetUser = allUsers.find(u => u.id === targetUserId);
+    if (!targetUser) {
+      return { success: false, message: 'Akun target tidak ditemukan.' };
+    }
+
+    const check = canVerifyTargetUser(actor.roles, targetUser.roles);
+    if (!check.canVerify) {
+      return { success: false, message: check.reason || 'Anda tidak memiliki hak untuk mencabut verifikasi akun ini.' };
+    }
+
+    const updated = allUsers.map(u => {
+      if (u.id === targetUserId) {
+        return {
+          ...u,
+          isVerified: false,
+          verifiedByAdminName: undefined,
+          verifiedAt: undefined,
+          verifiedByRole: undefined
+        };
+      }
+      return u;
+    });
+
+    setAllUsers(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('arut_all_users', JSON.stringify(updated));
+    }
+
+    if (user && user.id === targetUserId) {
+      const updatedSelf = updated.find(u => u.id === targetUserId);
+      if (updatedSelf) {
+        setUser(updatedSelf);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('arut_user', JSON.stringify(updatedSelf));
+        }
+      }
+    }
+
+    return {
+      success: true,
+      message: `Status verifikasi akun "${targetUser.name}" telah dicabut.`
+    };
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -591,16 +1112,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         logout,
         contributedWords,
+        allDictionaryWords,
         addWord,
+        resubmitWord,
+        bulkAddWords,
         favorites,
         toggleFavorite,
         isFavorite,
         allUsers,
         updateUserRoles,
+        verifyUserAccount,
+        unverifyUserAccount,
         moderatedWords,
         approveWord,
         rejectWord,
         requestRevision,
+        regions,
+        addRegion,
+        updateRegion,
+        deleteRegion,
+        updateUserProfile,
         isKvConnected,
         refreshKvData,
       }}

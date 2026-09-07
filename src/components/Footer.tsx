@@ -2,10 +2,17 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useLanguage } from '@/context/LanguageContext';
 
 export const Footer: React.FC = () => {
   const { t, language } = useLanguage();
+  const pathname = usePathname();
+
+  // Return null on /portal or /dashboard to provide full-viewport enterprise layout
+  if (pathname && (pathname.startsWith('/portal') || pathname.startsWith('/dashboard'))) {
+    return null;
+  }
 
   return (
     <footer className="footer-wrap">
@@ -35,7 +42,7 @@ export const Footer: React.FC = () => {
               <li><Link href="/kamus" className="nav-link" style={{ padding: 0 }}>{t('nav.dictionary')}</Link></li>
               <li><Link href="/kontributor" className="nav-link" style={{ padding: 0 }}>{t('nav.contributors')}</Link></li>
               <li><Link href="/donasi" className="nav-link" style={{ padding: 0 }}>{t('nav.donate')}</Link></li>
-              <li><Link href="/area-kontributor" className="nav-link" style={{ padding: 0 }}>{t('nav.contributorArea')}</Link></li>
+              <li><Link href="/portal" className="nav-link" style={{ padding: 0 }}>{t('nav.portal')}</Link></li>
             </ul>
           </div>
 

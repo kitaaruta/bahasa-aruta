@@ -12,8 +12,18 @@ export interface DictionaryWord {
   exampleEn: string;
   dialect?: string;
   synonyms?: string[];
+  culturalContext?: string;
+  sourceSpeaker?: string;
+  usageField?: string;
   verifiedBy?: string;
+  verifiedByName?: string;
+  verifierRole?: string;
+  verifiedAt?: string;
+  adminNotes?: string;
+  submitterName?: string;
   dateAdded?: string;
+  audioUrl?: string;
+  audioSpeaker?: string;
 }
 
 export interface CommonPhrase {
@@ -915,12 +925,14 @@ export type LangCode = 'arut' | 'id' | 'en';
 export function translateText(
   text: string,
   fromLang: LangCode,
-  toLang: LangCode
+  toLang: LangCode,
+  customDictionary?: DictionaryWord[]
 ): {
   translatedText: string;
   matchedWords: DictionaryWord[];
   notes: string[];
 } {
+  const dictionary = customDictionary && customDictionary.length > 0 ? customDictionary : ARUT_DICTIONARY;
   const trimmed = text.trim();
   if (!trimmed || fromLang === toLang) {
     return { translatedText: trimmed, matchedWords: [], notes: [] };
@@ -963,14 +975,14 @@ export function translateText(
     let found: DictionaryWord | undefined;
 
     if (fromLang === 'arut') {
-      found = ARUT_DICTIONARY.find(w => w.wordArut.toLowerCase() === clean);
+      found = dictionary.find(w => w.wordArut.toLowerCase() === clean);
     } else if (fromLang === 'id') {
-      found = ARUT_DICTIONARY.find(w => {
+      found = dictionary.find(w => {
         const parts = w.wordId.toLowerCase().split(/[\s/,;]+/);
         return parts.includes(clean) || w.wordId.toLowerCase() === clean;
       });
     } else if (fromLang === 'en') {
-      found = ARUT_DICTIONARY.find(w => {
+      found = dictionary.find(w => {
         const parts = w.wordEn.toLowerCase().split(/[\s/,;]+/);
         return parts.includes(clean) || w.wordEn.toLowerCase() === clean;
       });

@@ -8,7 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 
 export default function KamusPage() {
-  const { favorites } = useAuth();
+  const { favorites, allDictionaryWords, regions } = useAuth();
   const { t, language } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLetter, setSelectedLetter] = useState<string>('Semua');
@@ -27,16 +27,27 @@ export default function KamusPage() {
     'Sapaan',
     'Ungkapan Adat'
   ];
-  const dialects = ['Semua', 'Arut Umum', 'Arut Utara', 'Pangkut', 'Kobar', 'Tomun'];
+
+  // Dynamic dialects from master regions + base
+  const dialects = useMemo(() => {
+    const list = ['Semua', 'Arut Umum', 'Arut Utara', 'Pangkut', 'Sambi', 'Gandis', 'Kobar', 'Tomun'];
+    regions.forEach(r => {
+      const cleanName = r.name.replace(/^(Desa|Kelurahan)\s+/i, '');
+      if (!list.some(d => d.toLowerCase() === cleanName.toLowerCase() || d.toLowerCase() === r.name.toLowerCase())) {
+        list.push(r.name);
+      }
+    });
+    return list;
+  }, [regions]);
 
   const filteredWords = useMemo(() => {
-    return ARUT_DICTIONARY.filter((word) => {
+    return allDictionaryWords.filter((word) => {
       // 3-way search: Arut, Indonesian, English
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchArut = word.wordArut.toLowerCase().includes(q);
         const matchId = word.wordId.toLowerCase().includes(q);
-        const matchEn = word.wordEn.toLowerCase().includes(q);
+        const matchEn = word.wordEn?.toLowerCase().includes(q);
         const matchMeaning = word.meaning.toLowerCase().includes(q);
         const matchMeaningEn = word.meaningEn?.toLowerCase().includes(q);
         if (!matchArut && !matchId && !matchEn && !matchMeaning && !matchMeaningEn) {
@@ -56,7 +67,8 @@ export default function KamusPage() {
 
       // Dialect match
       if (selectedDialect !== 'Semua') {
-        if (!word.dialect?.toLowerCase().includes(selectedDialect.toLowerCase())) return false;
+        const dQuery = selectedDialect.toLowerCase().replace(/^(desa|kelurahan)\s+/i, '');
+        if (!word.dialect?.toLowerCase().includes(dQuery)) return false;
       }
 
       // Favorites match
@@ -66,7 +78,7 @@ export default function KamusPage() {
 
       return true;
     });
-  }, [searchQuery, selectedLetter, selectedCategory, selectedDialect, showOnlyFavorites, favorites]);
+  }, [allDictionaryWords, searchQuery, selectedLetter, selectedCategory, selectedDialect, showOnlyFavorites, favorites]);
 
   const resetFilters = () => {
     setSearchQuery('');
@@ -213,7 +225,7 @@ export default function KamusPage() {
             <button type="button" onClick={resetFilters} className="btn btn-outline btn-sm">
               {t('dict.allWords')}
             </button>
-            <Link href="/area-kontributor" className="btn btn-primary btn-sm">
+            <Link href="/portal?area=kontributor" className="btn btn-primary btn-sm">
               {t('dict.proposeWord')}
             </Link>
           </div>

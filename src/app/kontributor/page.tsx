@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { CONTRIBUTORS_DATA } from '@/data/contributors';
+import { CONTRIBUTORS_DATA, Contributor } from '@/data/contributors';
 import { useLanguage } from '@/context/LanguageContext';
+import { useAuth } from '@/context/AuthContext';
 
 export default function KontributorPage() {
   const { t, language } = useLanguage();
+  const { allUsers } = useAuth();
   const [selectedRole, setSelectedRole] = useState<string>('Semua');
 
   const roles = [
@@ -18,12 +20,43 @@ export default function KontributorPage() {
     'Peneliti Kebudayaan'
   ];
 
-  const filteredContributors = selectedRole === 'Semua'
-    ? CONTRIBUTORS_DATA
-    : CONTRIBUTORS_DATA.filter(c => c.role === selectedRole);
+  // Merge live platform users with baseline contributors
+  const mergedContributors = useMemo(() => {
+    const list: Contributor[] = [...CONTRIBUTORS_DATA];
+    allUsers.forEach(u => {
+      const existing = list.find(c => c.name.toLowerCase() === u.name.toLowerCase() || c.id === u.id);
+      if (existing) {
+        existing.wordsContributed = Math.max(existing.wordsContributed, u.wordsSubmittedCount);
+        existing.wordsVerified = Math.max(existing.wordsVerified, u.wordsVerifiedCount);
+        if (u.isVerified !== undefined) existing.isVerified = u.isVerified;
+        if (u.verifiedByAdminName) existing.verifiedByAdminName = u.verifiedByAdminName;
+      } else {
+        list.push({
+          id: u.id,
+          name: u.name,
+          role: u.roles.includes('verifier') ? 'Penutur Asli / Tetua Adat' : 'Pengumpul Kosakata',
+          origin: u.origin || 'Kotawaringin Barat',
+          avatar: u.avatar || u.name.substring(0, 2).toUpperCase(),
+          bio: u.bio || `Relawan pelestari bahasa Dayak Arut asal ${u.origin || 'Kotawaringin Barat'}.`,
+          wordsContributed: u.wordsSubmittedCount,
+          wordsVerified: u.wordsVerifiedCount,
+          badges: [u.badge || 'Kontributor'],
+          joinedDate: '2026',
+          isAdatElder: u.roles.includes('verifier'),
+          isVerified: u.isVerified || false,
+          verifiedByAdminName: u.verifiedByAdminName
+        });
+      }
+    });
+    return list;
+  }, [allUsers]);
 
-  const totalContributed = CONTRIBUTORS_DATA.reduce((acc, c) => acc + c.wordsContributed, 0);
-  const totalVerified = CONTRIBUTORS_DATA.reduce((acc, c) => acc + c.wordsVerified, 0);
+  const filteredContributors = selectedRole === 'Semua'
+    ? mergedContributors
+    : mergedContributors.filter(c => c.role === selectedRole);
+
+  const totalContributed = mergedContributors.reduce((acc, c) => acc + c.wordsContributed, 0);
+  const totalVerified = mergedContributors.reduce((acc, c) => acc + c.wordsVerified, 0);
 
   return (
     <div className="container" style={{ paddingBottom: '60px' }}>
@@ -93,37 +126,87 @@ export default function KontributorPage() {
       {/* Contributors Grid */}
       <div className="contributors-grid">
         {filteredContributors.map((c) => (
-          <div key={c.id} className="contributor-card">
-            <div className="contrib-header">
-              <div className="contrib-avatar">{c.avatar}</div>
-              <div>
-                <div className="contrib-name">{c.name}</div>
-                <div className="contrib-role">{c.role}</div>
-                <div className="contrib-origin">📍 {c.origin}</div>
-              </div>
-            </div>
-
-            <p className="contrib-bio">{c.bio}</p>
-
-            <div className="contrib-stats">
-              <div>
-                <div className="contrib-stat-number">{c.wordsContributed}</div>
-                <div className="contrib-stat-label">{language === 'en' ? 'Submitted' : 'Kata Ditulis'}</div>
-              </div>
-              <div>
-                <div className="contrib-stat-number">
-                  {c.wordsVerified}
+          <div key={c.id} className="contributor-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div>
+              <div className="contrib-header">
+                <Link
+                  href={`/profil?id=${c.id}`}
+                  style={{ textDecoration: 'none', color: 'inherit' }}
+                  title={`Buka profil publik ${c.name}`}
+                >
+                  <div className="contrib-avatar" style={{ cursor: 'pointer', transition: 'transform 0.15s ease' }}>
+                    {c.avatar}
+                  </div>
+                </Link>
+                <div>
+                  <Link
+                    href={`/profil?id=${c.id}`}
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                    title={`Buka profil publik ${c.name}`}
+                  >
+                    <div className="contrib-name" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span>{c.name}</span>
+                      {c.isVerified && (
+                        <span
+                          title={`Akun Terverifikasi Resmi (${c.verifiedByAdminName || 'Admin'})`}
+                          style={{
+                            background: '#dcfce7',
+                            color: '#166534',
+                            border: '1px solid #bbf7d0',
+                            borderRadius: '50%',
+                            width: '18px',
+                            height: '18px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.7rem',
+                            fontWeight: 800
+                          }}
+                        >
+                          ✓
+                        </span>
+                      )}
+                      <span style={{ fontSize: '0.75rem', color: 'var(--color-primary)' }}>↗</span>
+                    </div>
+                  </Link>
+                  <div className="contrib-role">{c.role}</div>
+                  <div className="contrib-origin">📍 {c.origin}</div>
                 </div>
-                <div className="contrib-stat-label">{language === 'en' ? 'Verified' : 'Terverifikasi'}</div>
+              </div>
+
+              <p className="contrib-bio">{c.bio}</p>
+
+              <div className="contrib-stats">
+                <div>
+                  <div className="contrib-stat-number">{c.wordsContributed}</div>
+                  <div className="contrib-stat-label">{language === 'en' ? 'Submitted' : 'Kata Ditulis'}</div>
+                </div>
+                <div>
+                  <div className="contrib-stat-number">
+                    {c.wordsVerified}
+                  </div>
+                  <div className="contrib-stat-label">{language === 'en' ? 'Verified' : 'Terverifikasi'}</div>
+                </div>
+              </div>
+
+              <div className="badge-row" style={{ marginBottom: '16px' }}>
+                {c.badges.map((b) => (
+                  <span key={b} className="badge-pill">
+                    {b}
+                  </span>
+                ))}
               </div>
             </div>
 
-            <div className="badge-row">
-              {c.badges.map((b) => (
-                <span key={b} className="badge-pill">
-                  {b}
-                </span>
-              ))}
+            {/* Link Aksi Profil Publik */}
+            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '12px', marginTop: 'auto' }}>
+              <Link
+                href={`/profil?id=${c.id}`}
+                className="btn btn-outline btn-sm"
+                style={{ width: '100%', justifyContent: 'center', fontSize: '0.78rem' }}
+              >
+                👤 {language === 'en' ? 'View Public Profile' : 'Lihat Profil Publik'} ➔
+              </Link>
             </div>
           </div>
         ))}
