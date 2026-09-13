@@ -20,7 +20,7 @@ const UI_TRANSLATIONS: Record<SupportedLanguage, Record<string, string>> = {
     'nav.dashboard': 'Portal',
     'nav.portal': 'Portal',
     'nav.contributorArea': 'Area Kontributor',
-    'nav.auth': 'Masuk / Daftar',
+    'nav.auth': 'Masuk/Daftar Akun Aruta',
     'nav.logout': 'Keluar',
     'brand.subtitle': 'Pelestarian Bahasa & Budaya Dayak Arut',
 

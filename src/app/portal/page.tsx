@@ -69,12 +69,15 @@ function DashboardContent() {
     window.history.pushState({}, '', url.toString());
   };
 
-  // Auto-login to superadmin demo if no user session is present yet
+  // Route Guard: redirect to login if no active user session
   useEffect(() => {
-    if (!isLoggedIn && !user) {
-      loginDemo('superadmin');
-    }
-  }, [isLoggedIn, user, loginDemo]);
+    const timer = setTimeout(() => {
+      if (!isLoggedIn && !user) {
+        router.push('/masuk?redirect=/portal');
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [isLoggedIn, user, router]);
 
   // Toast notice
   const [showToast, setShowToast] = useState(false);

@@ -11,6 +11,13 @@ export interface KVNamespace {
 
 export interface Env {
   Bahasa_KV?: KVNamespace;
+  ARUTA_CLIENT_ID?: string;
+  ARUTA_CLIENT_SECRET?: string;
+  ARUTA_SSO_BASE_URL?: string;
+  NEXT_PUBLIC_ARUTA_CLIENT_ID?: string;
+  NEXT_PUBLIC_ARUTA_SSO_BASE_URL?: string;
+  NEXT_PUBLIC_APP_URL?: string;
+  SESSION_SECRET?: string;
 }
 
 export interface EventContext<Env, P extends string = string, Data = Record<string, unknown>> {

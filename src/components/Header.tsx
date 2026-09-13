@@ -128,10 +128,18 @@ export const Header: React.FC = () => {
                     ? '0 0 0 2px rgba(124, 58, 237, 0.2), 0 2px 6px rgba(124, 58, 237, 0.25)'
                     : '0 0 0 2px rgba(5, 150, 105, 0.2), 0 2px 6px rgba(5, 150, 105, 0.2)',
                   transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-                  padding: 0
+                  overflow: 'hidden',
                 }}
               >
-                {user.avatar}
+                {user.picture ? (
+                  <img
+                    src={user.picture}
+                    alt={user.name}
+                    style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  user.avatar
+                )}
               </button>
 
               {/* Profile Mini Menu Dropdown */}
@@ -168,10 +176,19 @@ export const Header: React.FC = () => {
                           fontSize: '0.8rem',
                           background: 'var(--bg-card)',
                           color: highestRoleColor,
+                          overflow: 'hidden',
                           flexShrink: 0
                         }}
                       >
-                        {user.avatar}
+                        {user.picture ? (
+                          <img
+                            src={user.picture}
+                            alt={user.name}
+                            style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
+                          />
+                        ) : (
+                          user.avatar
+                        )}
                       </div>
                       <div style={{ overflow: 'hidden' }}>
                         <div style={{ fontSize: '0.875rem', fontWeight: 750, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

@@ -16,6 +16,7 @@ export interface ContributorUser {
   primaryRole: UserRole;
   origin: string;
   avatar: string;
+  picture?: string;
   bio?: string;
   badge: string;
   wordsSubmittedCount: number;
@@ -24,6 +25,9 @@ export interface ContributorUser {
   verifiedByAdminName?: string;
   verifiedAt?: string;
   verifiedByRole?: UserRole;
+  isOnboarded?: boolean;
+  username?: string;
+  status?: string;
 }
 
 export const getHighestRole = (roles: UserRole[] = []): UserRole => {
@@ -245,8 +249,10 @@ interface AuthContextType {
   hasAnyRole: (roles: UserRole[]) => boolean;
   login: (email: string) => boolean;
   loginDemo: (demoId: 'superadmin' | 'admin' | 'elder' | 'volunteer') => void;
+  loginWithArutaSession: (userData: any) => void;
+  completeOnboarding: (updatedUser: any) => void;
   register: (data: RegisterData) => boolean;
-  logout: () => void;
+  logout: () => Promise<void>;
   contributedWords: DictionaryWord[];
   allDictionaryWords: DictionaryWord[];
   addWord: (newWord: Omit<DictionaryWord, 'id'>) => void;
@@ -499,6 +505,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.error('Error parsing arut_regions', e);
         }
       }
+      // Periksa sesi aktif dari cookie HttpOnly Aruta SSO
+      fetch('/api/auth/session')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && data.authenticated && data.user) {
+            setUser((prev) => ({
+              ...(prev || {}),
+              ...data.user,
+            }));
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('arut_user', JSON.stringify(data.user));
+            }
+          }
+        })
+        .catch((err) => {
+          console.debug('Session check bypassed or offline:', err);
+        });
     } catch (e) {
       console.error('Error reading localStorage', e);
     }
@@ -582,7 +605,68 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
-  const logout = () => {
+  const loginWithArutaSession = (userData: any) => {
+    const ssoUser: ContributorUser = {
+      id: userData.id || userData.sub || `usr-${Date.now()}`,
+      name: userData.name,
+      email: userData.email,
+      roles: userData.roles || ['contributor'],
+      primaryRole: userData.primaryRole || 'contributor',
+      origin: userData.origin || 'Kelurahan Pangkut',
+      avatar: userData.avatar || userData.picture || (userData.name ? userData.name.substring(0, 2).toUpperCase() : 'AU'),
+      picture: userData.picture,
+      badge: userData.badge || 'Kontributor Aruta',
+      bio: userData.bio || '',
+      honorificTitle: userData.honorificTitle || '',
+      wordsSubmittedCount: 0,
+      wordsVerifiedCount: 0,
+      isVerified: userData.primaryRole === 'admin' || userData.primaryRole === 'superadmin',
+      isOnboarded: userData.isOnboarded || false,
+      username: userData.username,
+      status: userData.status || 'active',
+    };
+
+    setUser(ssoUser);
+    setAllUsers((prev) => {
+      const exists = prev.some((u) => u.id === ssoUser.id);
+      const updated = exists ? prev.map((u) => (u.id === ssoUser.id ? { ...u, ...ssoUser } : u)) : [...prev, ssoUser];
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('arut_all_users', JSON.stringify(updated));
+        localStorage.setItem('arut_user', JSON.stringify(ssoUser));
+      }
+      return updated;
+    });
+  };
+
+  const completeOnboarding = (updatedUserData: any) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      const merged: ContributorUser = {
+        ...prev,
+        ...updatedUserData,
+        isOnboarded: true,
+      };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('arut_user', JSON.stringify(merged));
+      }
+      return merged;
+    });
+
+    setAllUsers((prev) => {
+      const next = prev.map((u) => (u.id === updatedUserData.id ? { ...u, ...updatedUserData, isOnboarded: true } : u));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('arut_all_users', JSON.stringify(next));
+      }
+      return next;
+    });
+  };
+
+  const logout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (err) {
+      console.warn('Gagal memanggil logout API (non-blocking):', err);
+    }
     setUser(null);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('arut_user');
@@ -1109,6 +1193,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         hasAnyRole,
         login,
         loginDemo,
+        loginWithArutaSession,
+        completeOnboarding,
         register,
         logout,
         contributedWords,
