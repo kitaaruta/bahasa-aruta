@@ -41,10 +41,16 @@ export const ArutaSsoButton: React.FC<ArutaSsoButtonProps> = ({
     try {
       // 1. Ambil authorization URL dan set CSRF cookie di backend
       const res = await fetch('/api/auth/authorize-url');
-      const data = await res.json();
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        throw new Error(`Respons server tidak valid (${res.status}): ${text.substring(0, 100) || 'Kosong'}`);
+      }
 
       if (!res.ok || !data.success || !data.authUrl) {
-        throw new Error(data.message || 'Gagal memulai koneksi ke Aruta SSO.');
+        throw new Error(data.message || `Gagal memulai koneksi ke Aruta SSO (${res.status}).`);
       }
 
       const { authUrl, state } = data;
@@ -98,7 +104,13 @@ export const ArutaSsoButton: React.FC<ArutaSsoButtonProps> = ({
               body: JSON.stringify({ code, state: returnedState || state }),
             });
 
-            const exchangeData = await exchangeRes.json();
+            const exchangeText = await exchangeRes.text();
+            let exchangeData: any = {};
+            try {
+              exchangeData = exchangeText ? JSON.parse(exchangeText) : {};
+            } catch {
+              throw new Error(`Respons token tidak valid (${exchangeRes.status}): ${exchangeText.substring(0, 100) || 'Kosong'}`);
+            }
 
             if (!exchangeRes.ok || !exchangeData.success) {
               const errDesc = exchangeData.message || 'Gagal memvalidasi otorisasi Aruta SSO.';

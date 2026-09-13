@@ -507,7 +507,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       // Periksa sesi aktif dari cookie HttpOnly Aruta SSO
       fetch('/api/auth/session')
-        .then((res) => res.json())
+        .then(async (res) => {
+          if (!res.ok) return null;
+          const text = await res.text();
+          try {
+            return text ? JSON.parse(text) : null;
+          } catch {
+            return null;
+          }
+        })
         .then((data) => {
           if (data && data.authenticated && data.user) {
             setUser((prev) => ({
