@@ -31,14 +31,19 @@ async function verifySessionToken(token: string, secret: string): Promise<any | 
     const enc = new TextEncoder();
     const key = await crypto.subtle.importKey(
       'raw',
-      enc.encode(secret),
+      enc.encode(secret) as unknown as BufferSource,
       { name: 'HMAC', hash: 'SHA-256' },
       false,
       ['verify']
     );
 
     const signatureBytes = base64UrlDecode(encodedSignature);
-    const isValid = await crypto.subtle.verify('HMAC', key, signatureBytes, enc.encode(encodedPayload));
+    const isValid = await crypto.subtle.verify(
+      'HMAC',
+      key,
+      signatureBytes as unknown as BufferSource,
+      enc.encode(encodedPayload) as unknown as BufferSource
+    );
     if (!isValid) return null;
 
     const payloadBytes = base64UrlDecode(encodedPayload);
@@ -52,7 +57,7 @@ async function signSessionToken(payload: any, secret: string): Promise<string> {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
     'raw',
-    enc.encode(secret),
+    enc.encode(secret) as unknown as BufferSource,
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign']
@@ -60,7 +65,11 @@ async function signSessionToken(payload: any, secret: string): Promise<string> {
 
   const payloadString = JSON.stringify(payload);
   const encodedPayload = base64UrlEncode(enc.encode(payloadString));
-  const signature = await crypto.subtle.sign('HMAC', key, enc.encode(encodedPayload));
+  const signature = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    enc.encode(encodedPayload) as unknown as BufferSource
+  );
   const encodedSignature = base64UrlEncode(new Uint8Array(signature));
 
   return `${encodedPayload}.${encodedSignature}`;

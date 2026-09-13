@@ -23,7 +23,7 @@ async function verifySessionToken(token: string, secret: string): Promise<any | 
     const enc = new TextEncoder();
     const key = await crypto.subtle.importKey(
       'raw',
-      enc.encode(secret),
+      enc.encode(secret) as unknown as BufferSource,
       { name: 'HMAC', hash: 'SHA-256' },
       false,
       ['verify']
@@ -33,8 +33,8 @@ async function verifySessionToken(token: string, secret: string): Promise<any | 
     const isValid = await crypto.subtle.verify(
       'HMAC',
       key,
-      signatureBytes,
-      enc.encode(encodedPayload)
+      signatureBytes as unknown as BufferSource,
+      enc.encode(encodedPayload) as unknown as BufferSource
     );
 
     if (!isValid) return null;
