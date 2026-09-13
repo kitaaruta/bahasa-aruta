@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Hanya gunakan static HTML export jika flag STATIC_EXPORT diset
-  ...(process.env.STATIC_EXPORT === 'true' ? { output: 'export' } : {}),
+  output: 'export',
   images: {
     unoptimized: true,
   },

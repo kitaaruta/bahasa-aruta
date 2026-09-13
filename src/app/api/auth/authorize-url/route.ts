@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ArutaSsoService } from '@/lib/auth/sso-service';
 import { generateRandomState, OAUTH_STATE_COOKIE_NAME } from '@/lib/auth/session';
 
-export const dynamic = 'force-dynamic';
-
 export async function GET(request: NextRequest) {
   try {
     const state = generateRandomState();
